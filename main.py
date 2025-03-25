@@ -104,19 +104,56 @@ class TelegramMessageSender:
                 
                 if success:
                     count += 1
-                    logger.info(f"已发送 {count} 条消息" + 
+                    logger.info(f"已发送 {count} 条消息到 {group_id}" + 
                               (f"，共 {max_messages} 条" if max_messages else ""))
                 
                 # 等待指定的时间间隔
-                logger.info(f"等待 {interval_seconds} 秒后发送下一条消息...")
+                logger.info(f"等待 {interval_seconds} 秒后发送下一条消息到 {group_id}...")
                 await asyncio.sleep(interval_seconds)
                 
         except KeyboardInterrupt:
-            logger.info("用户中断，停止发送消息")
+            logger.info(f"用户中断，停止向 {group_id} 发送消息")
         except Exception as e:
-            logger.error(f"发送周期性消息时出错: {e}")
+            logger.error(f"向 {group_id} 发送周期性消息时出错: {e}")
         finally:
-            logger.info(f"总共发送了 {count} 条消息")
+            logger.info(f"总共向 {group_id} 发送了 {count} 条消息")
+
+    async def send_messages_to_multiple_targets(self, targets, message_generator):
+        """
+        向多个目标发送消息
+        :param targets: 目标配置字典，包含每个目标的interval_seconds和max_messages
+        :param message_generator: 消息生成器实例
+        """
+        tasks = []
+        for group_id, config in targets.items():
+            task = asyncio.create_task(
+                self.send_periodic_messages(
+                    group_id,
+                    message_generator,
+                    config['interval_seconds'],
+                    config.get('max_messages')
+                )
+            )
+            tasks.append(task)
+        
+        try:
+            # 等待所有任务完成或被中断
+            await asyncio.gather(*tasks, return_exceptions=True)
+        except KeyboardInterrupt:
+            # 取消所有正在运行的任务
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            # 等待所有任务完成取消操作
+            await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info("已停止所有消息发送任务")
+        except Exception as e:
+            logger.error(f"多目标消息发送时出错: {e}")
+            # 取消所有任务
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
     
     async def close(self):
         """
@@ -129,30 +166,48 @@ class TelegramMessageSender:
 async def main():
     try:
         # 尝试从配置文件导入设置
+        # 尝试从配置文件导入设置
         try:
             import config
             api_id = config.API_ID or os.environ.get('TELEGRAM_API_ID') or input("请输入Telegram API ID: ")
             api_hash = config.API_HASH or os.environ.get('TELEGRAM_API_HASH') or input("请输入Telegram API Hash: ")
             phone = config.PHONE or os.environ.get('TELEGRAM_PHONE') or input("请输入电话号码（带国家代码，如+8613800138000）: ")
-            group_id = config.GROUP_ID or input("请输入目标群组ID或用户名（如 -1001234567890 或 @groupname）: ")
-            interval_seconds = config.INTERVAL_SECONDS
-            max_messages = config.MAX_MESSAGES
-            # 创建消息生成器实例并添加模板
             message_generator = MessageGenerator()
             message_generator.add_template(config.MESSAGE_TEMPLATES)
+            targets = config.TARGETS
         except (ImportError, AttributeError):
             # 如果配置文件不存在或不完整，则从用户输入获取
             logger.info("未找到完整的配置文件，将从用户输入获取配置")
             api_id = os.environ.get('TELEGRAM_API_ID') or input("请输入Telegram API ID: ")
             api_hash = os.environ.get('TELEGRAM_API_HASH') or input("请输入Telegram API Hash: ")
             phone = os.environ.get('TELEGRAM_PHONE') or input("请输入电话号码（带国家代码，如+8613800138000）: ")
-            group_id = input("请输入目标群组ID或用户名（如 -1001234567890 或 @groupname）: ")
-            interval_seconds = float(input("请输入发送间隔（秒）: "))
-            set_max = input("是否设置最大发送数量？(y/n): ").lower() == 'y'
-            max_messages = int(input("请输入最大发送数量: ")) if set_max else None
+            
+            # 获取多目标配置
+            targets = {}
+            while True:
+                group_id = input("\n请输入目标群组ID或用户名（如 -1001234567890 或 @groupname），直接回车结束输入: ")
+                if not group_id:
+                    break
+                    
+                interval_seconds = float(input("请输入发送间隔（秒）: "))
+                set_max = input("是否设置最大发送数量？(y/n): ").lower() == 'y'
+                max_messages = int(input("请输入最大发送数量: ")) if set_max else None
+                
+                targets[group_id] = {
+                    "interval_seconds": interval_seconds,
+                    "max_messages": max_messages
+                }
+                
+                if input("\n是否继续添加目标？(y/n): ").lower() != 'y':
+                    break
+            
             # 创建消息生成器实例并添加默认模板
             message_generator = MessageGenerator()
             message_generator.add_template(["当前时间: {time}", "今天是 {date}"])
+        
+        if not targets:
+            logger.error("未配置任何目标，程序退出")
+            return
         
         # 创建消息发送器实例
         sender = TelegramMessageSender(api_id, api_hash, phone)
@@ -161,11 +216,10 @@ async def main():
         await sender.connect()
         
         # 开始定期发送消息
-        print(f"\n开始向 {group_id} 发送消息，间隔 {interval_seconds} 秒" + 
-              (f"，最多 {max_messages} 条" if max_messages else ""))
+        print("\n开始向多个目标发送消息...")
         print("按 Ctrl+C 停止发送\n")
         
-        await sender.send_periodic_messages(group_id, message_generator, interval_seconds, max_messages)
+        await sender.send_messages_to_multiple_targets(targets, message_generator)
     
     finally:
         # 关闭连接

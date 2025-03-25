@@ -32,9 +32,14 @@ pip install -r requirements.txt
      - `API_ID`: 从Telegram获取的API ID
      - `API_HASH`: 从Telegram获取的API Hash
      - `PHONE`: 您的电话号码（带国家代码，如+8613800138000）
-     - `GROUP_ID`: 目标群组ID或用户名（如 -1001234567890 或 @groupname）
-     - `INTERVAL_SECONDS`: 发送间隔（秒），默认60秒（1分钟）
-     - `MAX_MESSAGES`: 最大发送消息数量，None表示无限制
+     - `TARGETS`: 多目标配置字典，格式如下：
+       ```python
+       TARGETS = {
+           "@group1": {"interval_seconds": 60, "max_messages": 100},
+           "-1001234567890": {"interval_seconds": 300},
+           "@channel1": {"interval_seconds": 3600, "max_messages": 10}
+       }
+       ```
      - `MESSAGE_TEMPLATES`: 消息模板列表，支持时间格式化：{time}, {date}, {datetime}
      - `SESSION_FILE_PATH`: 会话文件保存路径
 
@@ -56,12 +61,17 @@ python main.py
 1. Telegram API ID
 2. Telegram API Hash
 3. 电话号码（带国家代码，如+8613800138000）
-4. 目标群组ID或用户名（如 -1001234567890 或 @groupname）
-5. 要发送的消息内容
-6. 发送间隔（秒）
-7. 是否设置最大发送数量
 
 首次运行时，Telegram会发送验证码到您的账户，您需要输入该验证码完成登录。
+
+### 多目标消息发送
+
+通过配置`TARGETS`字典，您可以同时向多个目标发送消息，每个目标可以设置不同的发送间隔和最大消息数量：
+
+- `interval_seconds`: 发送间隔（秒）
+- `max_messages`: 最大发送消息数量（可选，不设置表示无限制）
+
+脚本会自动为每个目标创建独立的发送任务，并同时运行这些任务。您可以通过按 Ctrl+C 随时停止所有发送任务。
 
 ## 注意事项
 

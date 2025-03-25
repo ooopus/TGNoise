@@ -13,10 +13,15 @@ API_ID = ""  # 在此处填入您的API ID
 API_HASH = ""  # 在此处填入您的API Hash
 PHONE = ""  # 在此处填入您的电话号码（带国家代码，如+8613800138000）
 
-# 消息设置
-GROUP_ID = ""  # 目标群组ID或用户名（如 -1001234567890 或 @groupname）
-INTERVAL_SECONDS = 60  # 发送间隔（秒），默认为1小时
-MAX_MESSAGES = None  # 最大发送消息数量，None表示无限制
+# 多目标消息设置
+# 格式：{
+#     "目标ID或用户名": {"interval_seconds": 发送间隔（秒）, "max_messages": 最大发送数量（可选）}
+# }
+TARGETS = {
+    "@group1": {"interval_seconds": 60, "max_messages": 100},  # 每60秒发送一次，最多发送100条
+    "-1001234567890": {"interval_seconds": 300},  # 每300秒发送一次，无限制发送
+    "@channel1": {"interval_seconds": 3600, "max_messages": 10}  # 每小时发送一次，最多发送10条
+}
 
 # 消息模板设置
 MESSAGE_TEMPLATES = [

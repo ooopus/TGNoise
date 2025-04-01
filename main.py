@@ -44,8 +44,8 @@ class TelegramMessageSender:
         # 创建会话文件名
         session_file = config.SESSION_FILE_PATH or self.username or self.phone
         
-        # 创建客户端实例
-        self.client = TelegramClient(session_file, self.api_id, self.api_hash)
+        # 创建客户端实例，不接收历史消息
+        self.client = TelegramClient(session_file, self.api_id, self.api_hash, receive_updates=False)
         
         # 连接到Telegram服务器
         await self.client.connect()
